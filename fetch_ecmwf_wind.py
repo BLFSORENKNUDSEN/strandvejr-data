@@ -31,14 +31,7 @@ DOWNSAMPLE = 2
 STEP = 0
 
 # Tilpas denne sti hvis scriptet ligger et andet sted.
-strandvejr-data/
-    fetch_ecmwf_wind.py
-    ecmwf_wind.json
-
-    .github/
-        workflows/
-            ecmwf.yml,
-)
+OUTPUT = os.environ.get("ECMWF_WIND_OUTPUT", "ecmwf_wind.json")
 
 
 def normalise_lon(lon):
