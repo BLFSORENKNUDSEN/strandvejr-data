@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+  concurrency:
+  group: ecmwf-wind-update
+  cancel-in-progress: false
+
 jobs:
   update-wind:
     runs-on: ubuntu-latest
@@ -35,10 +39,14 @@ jobs:
           ls -lh
           find . -name "ecmwf_wind.json" -print
 
-      - name: Gem nye data
+           - name: Gem nye data
         run: |
           git config user.name "Strandvejr ECMWF Bot"
           git config user.email "actions@github.com"
+
+          git pull --rebase --autostash origin main
+
           git add ecmwf_wind.json
           git diff --cached --quiet || git commit -m "Opdater ECMWF vinddata"
-          git push
+
+          git push origin main
