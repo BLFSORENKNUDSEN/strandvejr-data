@@ -134,8 +134,6 @@ def read_grib(path):
 
 
 def main():
-    os.makedirs(os.path.dirname(OUTPUT), exist_ok=True)
-
     client = Client(source="ecmwf", model="ifs", resol="0p25")
 
     latest = client.latest(
