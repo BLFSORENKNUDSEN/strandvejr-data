@@ -1,0 +1,44 @@
+name: Opdater ECMWF vind
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17,47 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update-wind:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Hent repository
+        uses: actions/checkout@v6
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer ECMWF pakker
+        run: |
+          python -m pip install --upgrade pip
+          pip install ecmwf-opendata eccodes
+
+      - name: Hent ECMWF vinddata
+        run: |
+          python fetch_ecmwf_wind.py
+
+      - name: Kontroller resultat
+        run: |
+          ls -lh
+          find . -name "ecmwf_wind.json" -print
+
+      - name: Gem nye data
+        run: |
+          git config user.name "Strandvejr ECMWF Bot"
+          git config user.email "actions@github.com"
+          git add ecmwf_wind.json
+          git diff --cached --quiet || git commit -m "Opdater ECMWF vinddata"
+          git push
