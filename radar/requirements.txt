@@ -1,0 +1,4 @@
+h5py==3.14.0
+numpy==2.2.6
+Pillow==11.3.0
+requests==2.32.4
