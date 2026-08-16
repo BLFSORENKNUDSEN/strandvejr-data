@@ -25,8 +25,8 @@
     .legendlabels{display:flex;justify-content:space-between;color:#444}
     .source{font-size:11px;color:#555;margin-top:5px}
     .city-marker{background:transparent;border:0}
-    .city-label{white-space:nowrap;font-size:12px;font-weight:700;color:#222;text-shadow:0 1px 2px #fff,1px 0 2px #fff,-1px 0 2px #fff;transform:translate(8px,-8px)}
-    .city-dot{position:absolute;width:6px;height:6px;border-radius:50%;background:#151515;left:0;top:0;box-shadow:0 0 0 1px rgba(255,255,255,.8)}
+    .city-label{white-space:nowrap;font-size:11px;font-weight:700;color:#222;text-shadow:0 1px 2px #fff,1px 0 2px #fff,-1px 0 2px #fff;transform:translate(8px,-8px)}
+    .city-dot{position:absolute;width:5px;height:5px;border-radius:50%;background:#151515;left:0;top:0;box-shadow:0 0 0 1px rgba(255,255,255,.85)}
     @media (max-width:700px){
       .radar-panel{top:8px;left:8px;right:8px;gap:6px}
       .card{padding:6px 7px}
@@ -34,6 +34,7 @@
       .time{min-width:145px;font-size:13px}
       input[type=range]{width:48vw}
       .legend{right:8px;bottom:20px}
+      .city-label{font-size:10px}
     }
   </style>
 </head>
@@ -68,15 +69,27 @@
 
     const cities=[
       ['Skagen',57.7209,10.5839],
+      ['Frederikshavn',57.4407,10.5366],
       ['Aalborg',57.0488,9.9217],
+      ['Thisted',56.9552,8.6949],
+      ['Holstebro',56.3601,8.6161],
       ['Viborg',56.4520,9.3963],
+      ['Randers',56.4607,10.0364],
       ['Herning',56.1362,8.9766],
       ['Aarhus',56.1629,10.2039],
+      ['Ringkøbing',56.0901,8.2440],
+      ['Horsens',55.8607,9.8503],
       ['Esbjerg',55.4765,8.4594],
+      ['Vejle',55.7113,9.5364],
       ['Kolding',55.4904,9.4722],
+      ['Sønderborg',54.9093,9.7922],
       ['Odense',55.4038,10.4024],
-      ['København',55.6761,12.5683],
+      ['Svendborg',55.0598,10.6068],
+      ['Kalundborg',55.6814,11.0886],
+      ['Slagelse',55.4028,11.3546],
       ['Roskilde',55.6415,12.0803],
+      ['København',55.6761,12.5683],
+      ['Helsingør',56.0361,12.6136],
       ['Næstved',55.2299,11.7609],
       ['Vordingborg',55.0080,11.9106],
       ['Maribo',54.7766,11.5002],
@@ -88,7 +101,7 @@
       const icon=L.divIcon({
         className:'city-marker',
         html:`<span class="city-dot"></span><span class="city-label">${name}</span>`,
-        iconSize:[110,20],
+        iconSize:[100,18],
         iconAnchor:[3,3]
       });
       L.marker([lat,lon],{icon,interactive:false,zIndexOffset:900}).addTo(map);
