@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Strandvejr radar</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    html,body,#map{height:100%;margin:0}
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#eaf3f8}
+    #map{background:#eaf3f8}
+    .radar-panel{position:absolute;z-index:1000;top:14px;left:14px;right:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;pointer-events:none}
+    .card{pointer-events:auto;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-radius:10px;box-shadow:0 3px 16px rgba(0,0,0,.15);padding:9px 11px;color:#20242a}
+    .time{font-weight:750;min-width:178px}
+    button{border:0;border-radius:8px;background:#20242a;color:#fff;padding:8px 12px;font:inherit;cursor:pointer}
+    input[type=range]{width:min(360px,55vw)}
+    .legend{position:absolute;z-index:1000;right:14px;bottom:26px;background:rgba(255,255,255,.92);padding:10px;border-radius:10px;box-shadow:0 3px 16px rgba(0,0,0,.15);font-size:12px}
+    .legendbar{display:flex;height:12px;width:210px;border-radius:4px;overflow:hidden;margin:5px 0}
+    .legendbar span{flex:1}
+    .legendlabels{display:flex;justify-content:space-between;color:#444}
+    .source{font-size:11px;color:#555;margin-top:5px}
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="radar-panel">
+    <div class="card"><button id="play">Pause</button></div>
+    <div class="card time" id="time">Henter radar...</div>
+    <div class="card"><input id="slider" type="range" min="0" max="0" value="0" step="1"></div>
+  </div>
+  <div class="legend">
+    <strong>Radarreflektivitet</strong>
+    <div class="legendbar" id="legendbar"></div>
+    <div class="legendlabels"><span>5 dBZ</span><span>40</span><span>75+</span></div>
+    <div class="source">Data: DMI Frie Data</div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map=L.map('map',{zoomControl:true,attributionControl:true}).setView([56.0,10.8],6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom:12,
+      attribution:'&copy; OpenStreetMap bidragydere'
+    }).addTo(map);
+
+    let frames=[],overlay=null,current=0,timer=null,playing=true;
+    const slider=document.getElementById('slider');
+    const timeEl=document.getElementById('time');
+    const playBtn=document.getElementById('play');
+
+    function localTime(iso){
+      return new Intl.DateTimeFormat('da-DK',{weekday:'short',hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit',timeZone:'Europe/Copenhagen'}).format(new Date(iso));
+    }
+
+    function showFrame(i){
+      if(!frames.length)return;
+      current=(i+frames.length)%frames.length;
+      const f=frames[current];
+      const [w,s,e,n]=f.bbox;
+      const bounds=[[s,w],[n,e]];
+      if(overlay)map.removeLayer(overlay);
+      overlay=L.imageOverlay(f.file,bounds,{opacity:.82,interactive:false}).addTo(map);
+      slider.value=current;
+      timeEl.textContent=localTime(f.time);
+    }
+
+    function start(){
+      clearInterval(timer);
+      timer=setInterval(()=>showFrame(current+1),700);
+      playing=true;
+      playBtn.textContent='Pause';
+    }
+    function stop(){clearInterval(timer);timer=null;playing=false;playBtn.textContent='Afspil';}
+
+    playBtn.addEventListener('click',()=>playing?stop():start());
+    slider.addEventListener('input',e=>{stop();showFrame(Number(e.target.value));});
+
+    fetch('data/manifest.json',{cache:'no-store'})
+      .then(r=>{if(!r.ok)throw new Error('manifest');return r.json()})
+      .then(data=>{
+        frames=data.frames||[];
+        slider.max=Math.max(0,frames.length-1);
+        const bar=document.getElementById('legendbar');
+        (data.legend||[]).forEach(item=>{
+          const s=document.createElement('span');
+          const [r,g,b,a]=item.rgba;
+          s.style.background=`rgba(${r},${g},${b},${a/255})`;
+          bar.appendChild(s);
+        });
+        if(!frames.length)throw new Error('ingen frames');
+        showFrame(frames.length-1);
+        start();
+      })
+      .catch(()=>{timeEl.textContent='Radar kunne ikke hentes';stop();});
+  </script>
+</body>
+</html>
