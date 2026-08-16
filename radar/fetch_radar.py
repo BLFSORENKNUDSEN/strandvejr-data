@@ -19,27 +19,23 @@ FRAME_COUNT = int(os.getenv("RADAR_FRAME_COUNT", "13"))
 TIMEOUT = 45
 
 # Radar reflectivity palette in 5 dBZ steps.
-# The sequence follows the conventional DMI/meteorolog.dk presentation:
-# cyan/blue for light precipitation, green/yellow for moderate precipitation,
-# red for heavy precipitation and magenta/purple for the strongest echoes.
-# PNG pixels are fully opaque; display opacity is controlled by the map overlay.
 BREAKS = np.array([5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75], dtype=float)
 COLORS = np.array([
-    [64, 240, 240, 255],  # 5-10 dBZ
-    [65, 184, 248, 255],  # 10-15
-    [64, 64, 248, 255],   # 15-20
-    [64, 255, 64, 255],   # 20-25
-    [64, 213, 64, 255],   # 25-30
-    [64, 172, 64, 255],   # 30-35
-    [255, 255, 64, 255],  # 35-40
-    [237, 207, 64, 255],  # 40-45
-    [255, 172, 64, 255],  # 45-50
-    [255, 64, 64, 255],   # 50-55
-    [224, 64, 64, 255],   # 55-60
-    [207, 64, 64, 255],   # 60-65
-    [255, 64, 255, 255],  # 65-70
-    [178, 128, 214, 255], # 70-75
-    [64, 64, 64, 255],    # 75+ dBZ
+    [64, 240, 240, 255],
+    [65, 184, 248, 255],
+    [64, 64, 248, 255],
+    [64, 255, 64, 255],
+    [64, 213, 64, 255],
+    [64, 172, 64, 255],
+    [255, 255, 64, 255],
+    [237, 207, 64, 255],
+    [255, 172, 64, 255],
+    [255, 64, 64, 255],
+    [224, 64, 64, 255],
+    [207, 64, 64, 255],
+    [255, 64, 255, 255],
+    [178, 128, 214, 255],
+    [64, 64, 64, 255],
 ], dtype=np.uint8)
 
 
@@ -53,6 +49,14 @@ def attrs(group):
     return {str(k): decode(v) for k, v in group.attrs.items()}
 
 
+def group_meta(group: h5py.Group) -> dict:
+    meta = {}
+    if "what" in group and isinstance(group["what"], h5py.Group):
+        meta.update(attrs(group["what"]))
+    meta.update(attrs(group))
+    return meta
+
+
 def locate_reflectivity(h5: h5py.File):
     candidates = []
 
@@ -61,9 +65,22 @@ def locate_reflectivity(h5: h5py.File):
             return
         if "data" not in obj or not isinstance(obj["data"], h5py.Dataset):
             return
-        meta = attrs(obj)
-        if "what" in obj and isinstance(obj["what"], h5py.Group):
-            meta = {**attrs(obj["what"]), **meta}
+
+        # DMI composite files do not always place all ODIM metadata in the
+        # same group. Collect metadata from the data group and its ancestors.
+        # More specific metadata wins over values inherited from a parent.
+        lineage = []
+        current = obj
+        while isinstance(current, h5py.Group):
+            lineage.append(current)
+            if current.name == "/":
+                break
+            current = current.parent
+
+        meta = {}
+        for group in reversed(lineage):
+            meta.update(group_meta(group))
+
         quantity = str(meta.get("quantity", "")).upper()
         score = 0 if quantity == "DBZH" else 1 if "DBZ" in quantity else 2
         candidates.append((score, name, obj["data"], meta))
@@ -80,8 +97,13 @@ def dbz_from_h5(raw_bytes: bytes) -> np.ndarray:
         dataset, meta = locate_reflectivity(h5)
         raw = dataset[...]
 
-        gain = float(meta.get("gain", 1.0))
-        offset = float(meta.get("offset", 0.0))
+        # ODIM encodes physical values as raw * gain + offset.
+        # DMI's composite raster is uint8. Older/current DMI composite files
+        # may omit these values at data1 level, so use the established DMI
+        # DBZH count conversion as a defensive fallback rather than treating
+        # the byte value itself as dBZ.
+        gain = float(meta.get("gain", 0.5))
+        offset = float(meta.get("offset", -32.0))
         nodata = meta.get("nodata", 255)
         undetect = meta.get("undetect", 0)
 
@@ -105,8 +127,6 @@ def colorize(z: np.ndarray) -> Image.Image:
 
 
 def fetch_features():
-    # Full range scans are generated every 10 minutes and provide the widest
-    # useful coverage for a beach weather map.
     response = requests.get(
         API,
         params={"limit": 80, "scanType": "fullRange", "sortorder": "datetime,DESC"},
