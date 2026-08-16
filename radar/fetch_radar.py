@@ -105,7 +105,7 @@ def fetch_features():
     # useful coverage for a beach weather map.
     response = requests.get(
         API,
-        params={"limit": 80, "scanType": "fullRange"},
+        params={"limit": 80, "scanType": "fullRange", "sortorder": "datetime,DESC"},
         timeout=TIMEOUT,
         headers={"User-Agent": "strandvejr-radar/1.0"},
     )
