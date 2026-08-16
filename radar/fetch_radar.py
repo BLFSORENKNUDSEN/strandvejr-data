@@ -18,24 +18,28 @@ FRAMES = OUT / "frames"
 FRAME_COUNT = int(os.getenv("RADAR_FRAME_COUNT", "13"))
 TIMEOUT = 45
 
-# DMI radar palette. Transparent below 5 dBZ, then increasing intensity.
+# Radar reflectivity palette in 5 dBZ steps.
+# The sequence follows the conventional DMI/meteorolog.dk presentation:
+# cyan/blue for light precipitation, green/yellow for moderate precipitation,
+# red for heavy precipitation and magenta/purple for the strongest echoes.
+# PNG pixels are fully opaque; display opacity is controlled by the map overlay.
 BREAKS = np.array([5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75], dtype=float)
 COLORS = np.array([
-    [54, 216, 214, 160],
-    [47, 191, 239, 175],
-    [48, 122, 238, 185],
-    [50, 65, 230, 195],
-    [47, 214, 59, 205],
-    [53, 177, 61, 210],
-    [136, 211, 47, 215],
-    [251, 239, 54, 220],
-    [247, 189, 49, 225],
-    [248, 97, 48, 230],
-    [240, 53, 51, 235],
-    [205, 57, 57, 238],
-    [232, 45, 215, 240],
-    [176, 64, 218, 242],
-    [119, 78, 174, 245],
+    [64, 240, 240, 255],  # 5-10 dBZ
+    [65, 184, 248, 255],  # 10-15
+    [64, 64, 248, 255],   # 15-20
+    [64, 255, 64, 255],   # 20-25
+    [64, 213, 64, 255],   # 25-30
+    [64, 172, 64, 255],   # 30-35
+    [255, 255, 64, 255],  # 35-40
+    [237, 207, 64, 255],  # 40-45
+    [255, 172, 64, 255],  # 45-50
+    [255, 64, 64, 255],   # 50-55
+    [224, 64, 64, 255],   # 55-60
+    [207, 64, 64, 255],   # 60-65
+    [255, 64, 255, 255],  # 65-70
+    [178, 128, 214, 255], # 70-75
+    [64, 64, 64, 255],    # 75+ dBZ
 ], dtype=np.uint8)
 
 
