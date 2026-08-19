@@ -13,6 +13,9 @@
     .radar-panel{position:absolute;z-index:1000;top:14px;left:14px;right:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;pointer-events:none}
     .card{pointer-events:auto;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-radius:10px;box-shadow:0 3px 16px rgba(0,0,0,.15);padding:8px 10px;color:#20242a}
     .time{font-weight:750;min-width:178px}
+    .mode{font-weight:800;font-size:12px;letter-spacing:.02em}
+    .mode.forecast{background:#fff3d6;color:#754c00}
+    .mode.observation{background:#e7f3ff;color:#12507e}
     button{border:0;border-radius:8px;background:#20242a;color:#fff;padding:8px 11px;font:inherit;font-weight:650;cursor:pointer}
     button.secondary{background:#eef1f3;color:#20242a}
     button.active{background:#1769aa;color:#fff}
@@ -21,21 +24,9 @@
     input[type=range]{width:min(330px,48vw)}
     .legend{position:absolute;z-index:1000;right:14px;bottom:26px;background:rgba(255,255,255,.94);padding:10px;border-radius:10px;box-shadow:0 3px 16px rgba(0,0,0,.15);font-size:12px}
     .legendbar{display:flex;height:12px;width:210px;border-radius:4px;overflow:hidden;margin:5px 0}
-    .legendbar span{flex:1}
-    .legendlabels{display:flex;justify-content:space-between;color:#444}
-    .source{font-size:11px;color:#555;margin-top:5px}
-    .city-marker{background:transparent;border:0}
-    .city-label{white-space:nowrap;font-size:11px;font-weight:700;color:#222;text-shadow:0 1px 2px #fff,1px 0 2px #fff,-1px 0 2px #fff;transform:translate(8px,-8px)}
-    .city-dot{position:absolute;width:5px;height:5px;border-radius:50%;background:#151515;left:0;top:0;box-shadow:0 0 0 1px rgba(255,255,255,.85)}
-    @media (max-width:700px){
-      .radar-panel{top:8px;left:8px;right:8px;gap:6px}
-      .card{padding:6px 7px}
-      button{padding:7px 9px}
-      .time{min-width:145px;font-size:13px}
-      input[type=range]{width:48vw}
-      .legend{right:8px;bottom:20px}
-      .city-label{font-size:10px}
-    }
+    .legendbar span{flex:1}.legendlabels{display:flex;justify-content:space-between;color:#444}.source{font-size:11px;color:#555;margin-top:5px}
+    .city-marker{background:transparent;border:0}.city-label{white-space:nowrap;font-size:11px;font-weight:700;color:#222;text-shadow:0 1px 2px #fff,1px 0 2px #fff,-1px 0 2px #fff;transform:translate(8px,-8px)}.city-dot{position:absolute;width:5px;height:5px;border-radius:50%;background:#151515;left:0;top:0;box-shadow:0 0 0 1px rgba(255,255,255,.85)}
+    @media (max-width:700px){.radar-panel{top:8px;left:8px;right:8px;gap:6px}.card{padding:6px 7px}button{padding:7px 9px}.time{min-width:145px;font-size:13px}input[type=range]{width:48vw}.legend{right:8px;bottom:20px}.city-label{font-size:10px}}
   </style>
 </head>
 <body>
@@ -49,152 +40,52 @@
       <button class="active rangeBtn" data-minutes="120">120 min</button>
     </div>
     <div class="card time" id="time">Henter radar...</div>
+    <div class="card mode observation" id="mode">Observation</div>
     <div class="card"><input id="slider" type="range" min="0" max="0" value="0" step="1" aria-label="Tidspunkt"></div>
   </div>
   <div class="legend" id="legend">
     <strong>Radarreflektivitet</strong>
     <div class="legendbar" id="legendbar"></div>
     <div class="legendlabels"><span>5 dBZ</span><span>40</span><span>75+</span></div>
-    <div class="source">Data: DMI Frie Data</div>
+    <div class="source">Data: DMI Frie Data · Prognose: Strandvejr radar nowcast</div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const denmarkBounds=[[54.45,7.65],[57.95,15.35]];
     const map=L.map('map',{zoomControl:true,attributionControl:true}).fitBounds(denmarkBounds,{padding:[10,10]});
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-      maxZoom:12,
-      attribution:'&copy; OpenStreetMap bidragydere'
-    }).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:12,attribution:'&copy; OpenStreetMap bidragydere'}).addTo(map);
 
-    const cities=[
-      ['Skagen',57.7209,10.5839],
-      ['Frederikshavn',57.4407,10.5366],
-      ['Aalborg',57.0488,9.9217],
-      ['Thisted',56.9552,8.6949],
-      ['Holstebro',56.3601,8.6161],
-      ['Viborg',56.4520,9.3963],
-      ['Randers',56.4607,10.0364],
-      ['Herning',56.1362,8.9766],
-      ['Aarhus',56.1629,10.2039],
-      ['Ringkøbing',56.0901,8.2440],
-      ['Horsens',55.8607,9.8503],
-      ['Esbjerg',55.4765,8.4594],
-      ['Vejle',55.7113,9.5364],
-      ['Kolding',55.4904,9.4722],
-      ['Sønderborg',54.9093,9.7922],
-      ['Odense',55.4038,10.4024],
-      ['Svendborg',55.0598,10.6068],
-      ['Kalundborg',55.6814,11.0886],
-      ['Slagelse',55.4028,11.3546],
-      ['Roskilde',55.6415,12.0803],
-      ['København',55.6761,12.5683],
-      ['Helsingør',56.0361,12.6136],
-      ['Næstved',55.2299,11.7609],
-      ['Vordingborg',55.0080,11.9106],
-      ['Maribo',54.7766,11.5002],
-      ['Nykøbing F.',54.7654,11.8755],
-      ['Rønne',55.1009,14.7066]
-    ];
-
-    cities.forEach(([name,lat,lon])=>{
-      const icon=L.divIcon({
-        className:'city-marker',
-        html:`<span class="city-dot"></span><span class="city-label">${name}</span>`,
-        iconSize:[100,18],
-        iconAnchor:[3,3]
-      });
-      L.marker([lat,lon],{icon,interactive:false,zIndexOffset:900}).addTo(map);
-    });
+    const cities=[['Skagen',57.7209,10.5839],['Frederikshavn',57.4407,10.5366],['Aalborg',57.0488,9.9217],['Thisted',56.9552,8.6949],['Holstebro',56.3601,8.6161],['Viborg',56.4520,9.3963],['Randers',56.4607,10.0364],['Herning',56.1362,8.9766],['Aarhus',56.1629,10.2039],['Ringkøbing',56.0901,8.2440],['Horsens',55.8607,9.8503],['Esbjerg',55.4765,8.4594],['Vejle',55.7113,9.5364],['Kolding',55.4904,9.4722],['Sønderborg',54.9093,9.7922],['Odense',55.4038,10.4024],['Svendborg',55.0598,10.6068],['Kalundborg',55.6814,11.0886],['Slagelse',55.4028,11.3546],['Roskilde',55.6415,12.0803],['København',55.6761,12.5683],['Helsingør',56.0361,12.6136],['Næstved',55.2299,11.7609],['Vordingborg',55.0080,11.9106],['Maribo',54.7766,11.5002],['Nykøbing F.',54.7654,11.8755],['Rønne',55.1009,14.7066]];
+    cities.forEach(([name,lat,lon])=>{const icon=L.divIcon({className:'city-marker',html:`<span class="city-dot"></span><span class="city-label">${name}</span>`,iconSize:[100,18],iconAnchor:[3,3]});L.marker([lat,lon],{icon,interactive:false,zIndexOffset:900}).addTo(map)});
 
     let allFrames=[],frames=[],overlay=null,current=0,timer=null,playing=true,radarEnabled=true,historyMinutes=120;
-    const slider=document.getElementById('slider');
-    const timeEl=document.getElementById('time');
-    const playBtn=document.getElementById('play');
-    const radarBtn=document.getElementById('radarToggle');
-    const legend=document.getElementById('legend');
-    const rangeButtons=[...document.querySelectorAll('.rangeBtn')];
+    const slider=document.getElementById('slider'),timeEl=document.getElementById('time'),modeEl=document.getElementById('mode'),playBtn=document.getElementById('play'),radarBtn=document.getElementById('radarToggle'),legend=document.getElementById('legend'),rangeButtons=[...document.querySelectorAll('.rangeBtn')];
 
-    function localTime(iso){
-      return new Intl.DateTimeFormat('da-DK',{weekday:'short',hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit',timeZone:'Europe/Copenhagen'}).format(new Date(iso));
+    function localTime(iso){return new Intl.DateTimeFormat('da-DK',{weekday:'short',hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit',timeZone:'Europe/Copenhagen'}).format(new Date(iso))}
+    function rebuildFrames(minutes){
+      const obs=allFrames.filter(f=>(f.kind||'observation')==='observation');
+      const forecast=allFrames.filter(f=>f.kind==='forecast');
+      if(!obs.length)return allFrames.slice();
+      const newestObs=new Date(obs[obs.length-1].time).getTime();
+      const cutoff=newestObs-minutes*60*1000;
+      return obs.filter(f=>new Date(f.time).getTime()>=cutoff).concat(forecast);
     }
-
-    function filteredFrames(minutes){
-      if(!allFrames.length)return [];
-      const newest=new Date(allFrames[allFrames.length-1].time).getTime();
-      const cutoff=newest-minutes*60*1000;
-      const selected=allFrames.filter(f=>new Date(f.time).getTime()>=cutoff);
-      return selected.length?selected:[allFrames[allFrames.length-1]];
-    }
-
     function showFrame(i){
-      if(!frames.length)return;
-      current=(i+frames.length)%frames.length;
-      const f=frames[current];
-      if(overlay){map.removeLayer(overlay);overlay=null;}
-      if(radarEnabled){
-        const [w,s,e,n]=f.bbox;
-        overlay=L.imageOverlay(f.file,[[s,w],[n,e]],{opacity:.82,interactive:false,pane:'overlayPane'}).addTo(map);
-      }
-      slider.value=current;
-      timeEl.textContent=localTime(f.time);
+      if(!frames.length)return;current=(i+frames.length)%frames.length;const f=frames[current];if(overlay){map.removeLayer(overlay);overlay=null}
+      if(radarEnabled){const [w,s,e,n]=f.bbox;overlay=L.imageOverlay(f.file,[[s,w],[n,e]],{opacity:f.kind==='forecast'?.72:.82,interactive:false,pane:'overlayPane'}).addTo(map)}
+      slider.value=current;timeEl.textContent=localTime(f.time);
+      const isForecast=f.kind==='forecast';modeEl.textContent=isForecast?`Prognose +${f.leadMinutes} min`:'Observation';modeEl.classList.toggle('forecast',isForecast);modeEl.classList.toggle('observation',!isForecast);
     }
+    function applyHistory(minutes){historyMinutes=minutes;frames=rebuildFrames(minutes);slider.max=Math.max(0,frames.length-1);const lastObs=frames.map((f,i)=>[(f.kind||'observation')==='observation',i]).filter(x=>x[0]).pop();current=lastObs?lastObs[1]:frames.length-1;rangeButtons.forEach(btn=>btn.classList.toggle('active',Number(btn.dataset.minutes)===minutes));showFrame(current);if(playing)start()}
+    function start(){clearInterval(timer);if(!frames.length)return;timer=setInterval(()=>showFrame(current+1),700);playing=true;playBtn.textContent='Pause'}
+    function stop(){clearInterval(timer);timer=null;playing=false;playBtn.textContent='Afspil'}
+    function setRadar(enabled){radarEnabled=enabled;radarBtn.textContent=enabled?'Radar til':'Radar fra';radarBtn.classList.toggle('active',enabled);radarBtn.classList.toggle('secondary',!enabled);legend.style.display=enabled?'block':'none';showFrame(current)}
+    playBtn.addEventListener('click',()=>playing?stop():start());radarBtn.addEventListener('click',()=>setRadar(!radarEnabled));slider.addEventListener('input',e=>{stop();showFrame(Number(e.target.value))});rangeButtons.forEach(btn=>btn.addEventListener('click',()=>applyHistory(Number(btn.dataset.minutes))));
 
-    function applyHistory(minutes){
-      historyMinutes=minutes;
-      frames=filteredFrames(minutes);
-      slider.max=Math.max(0,frames.length-1);
-      current=frames.length-1;
-      rangeButtons.forEach(btn=>btn.classList.toggle('active',Number(btn.dataset.minutes)===minutes));
-      showFrame(current);
-      if(playing)start();
-    }
-
-    function start(){
-      clearInterval(timer);
-      if(!frames.length)return;
-      timer=setInterval(()=>showFrame(current+1),700);
-      playing=true;
-      playBtn.textContent='Pause';
-    }
-
-    function stop(){
-      clearInterval(timer);
-      timer=null;
-      playing=false;
-      playBtn.textContent='Afspil';
-    }
-
-    function setRadar(enabled){
-      radarEnabled=enabled;
-      radarBtn.textContent=enabled?'Radar til':'Radar fra';
-      radarBtn.classList.toggle('active',enabled);
-      radarBtn.classList.toggle('secondary',!enabled);
-      legend.style.display=enabled?'block':'none';
-      showFrame(current);
-    }
-
-    playBtn.addEventListener('click',()=>playing?stop():start());
-    radarBtn.addEventListener('click',()=>setRadar(!radarEnabled));
-    slider.addEventListener('input',e=>{stop();showFrame(Number(e.target.value));});
-    rangeButtons.forEach(btn=>btn.addEventListener('click',()=>applyHistory(Number(btn.dataset.minutes))));
-
-    fetch('data/manifest.json',{cache:'no-store'})
-      .then(r=>{if(!r.ok)throw new Error('manifest');return r.json()})
-      .then(data=>{
-        allFrames=(data.frames||[]).slice().sort((a,b)=>new Date(a.time)-new Date(b.time));
-        const bar=document.getElementById('legendbar');
-        (data.legend||[]).forEach(item=>{
-          const s=document.createElement('span');
-          const [r,g,b,a]=item.rgba;
-          s.style.background=`rgba(${r},${g},${b},${a/255})`;
-          bar.appendChild(s);
-        });
-        if(!allFrames.length)throw new Error('ingen frames');
-        applyHistory(historyMinutes);
-        start();
-      })
-      .catch(()=>{timeEl.textContent='Radar kunne ikke hentes';stop();radarBtn.disabled=true;});
+    fetch('data/manifest.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('manifest');return r.json()}).then(data=>{
+      allFrames=(data.frames||[]).slice().sort((a,b)=>new Date(a.time)-new Date(b.time));const bar=document.getElementById('legendbar');(data.legend||[]).forEach(item=>{const s=document.createElement('span');const [r,g,b,a]=item.rgba;s.style.background=`rgba(${r},${g},${b},${a/255})`;bar.appendChild(s)});if(!allFrames.length)throw new Error('ingen frames');applyHistory(historyMinutes);start()
+    }).catch(()=>{timeEl.textContent='Radar kunne ikke hentes';stop();radarBtn.disabled=true});
   </script>
 </body>
 </html>
