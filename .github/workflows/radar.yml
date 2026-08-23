@@ -37,6 +37,9 @@ jobs:
       - name: Hent og render DMI radar
         run: python radar/fetch_radar.py
 
+      - name: Hent DMI lyndata
+        run: python radar/fetch_lightning.py
+
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
