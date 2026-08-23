@@ -12,6 +12,7 @@ import h5py
 import numpy as np
 import requests
 from PIL import Image
+from pyproj import CRS, Transformer
 
 API = "https://opendataapi.dmi.dk/v1/radardata/collections/composite/items"
 OUT = Path(os.getenv("RADAR_OUT", "radar/site/data"))
@@ -76,7 +77,26 @@ def locate_reflectivity(h5: h5py.File):
     return candidates[0][2], candidates[0][3]
 
 
-def dbz_from_h5(raw_bytes: bytes) -> np.ndarray:
+def radar_georef(h5: h5py.File, shape: tuple[int, int]) -> dict | None:
+    """Read ODIM cartesian georeferencing from the HDF5 /where group."""
+    if "where" not in h5 or not isinstance(h5["where"], h5py.Group):
+        return None
+    where = attrs(h5["where"])
+    required = ("projdef", "xscale", "yscale", "LL_lon", "LL_lat")
+    if not all(k in where for k in required):
+        return None
+    return {
+        "projdef": str(where["projdef"]),
+        "xscale": float(where["xscale"]),
+        "yscale": float(where["yscale"]),
+        "ll_lon": float(where["LL_lon"]),
+        "ll_lat": float(where["LL_lat"]),
+        "xsize": int(where.get("xsize", shape[1])),
+        "ysize": int(where.get("ysize", shape[0])),
+    }
+
+
+def dbz_from_h5(raw_bytes: bytes) -> tuple[np.ndarray, dict | None]:
     with h5py.File(io.BytesIO(raw_bytes), "r") as h5:
         dataset, meta = locate_reflectivity(h5)
         raw = dataset[...]
@@ -91,7 +111,64 @@ def dbz_from_h5(raw_bytes: bytes) -> np.ndarray:
         if undetect is not None:
             invalid |= raw == undetect
         z[invalid] = np.nan
+        return z, radar_georef(h5, z.shape)
+
+
+def reproject_to_lonlat(z: np.ndarray, georef: dict | None, bbox: list[float]) -> np.ndarray:
+    """Warp the ODIM projected raster to a regular lon/lat raster for Leaflet imageOverlay."""
+    if not georef:
         return z
+
+    try:
+        src_crs = CRS.from_user_input(georef["projdef"])
+        to_src = Transformer.from_crs("EPSG:4326", src_crs, always_xy=True)
+        llx, lly = to_src.transform(georef["ll_lon"], georef["ll_lat"])
+    except Exception as exc:
+        print(f"Advarsel: kunne ikke læse radarprojektion: {exc}")
+        return z
+
+    h, w = z.shape
+    west, south, east, north = [float(v) for v in bbox]
+    out = np.full((h, w), np.nan, dtype=np.float32)
+    source_values = np.nan_to_num(z, nan=0.0).astype(np.float32)
+    source_valid = np.isfinite(z).astype(np.float32)
+
+    lons = west + (np.arange(w, dtype=np.float64) + 0.5) * (east - west) / w
+    chunk = 128
+    xscale = georef["xscale"]
+    yscale = georef["yscale"]
+    ysize = georef["ysize"]
+
+    for row0 in range(0, h, chunk):
+        row1 = min(h, row0 + chunk)
+        rows = np.arange(row0, row1, dtype=np.float64)
+        lats = north - (rows + 0.5) * (north - south) / h
+        lon_grid, lat_grid = np.meshgrid(lons, lats)
+        xs, ys = to_src.transform(lon_grid, lat_grid)
+
+        map_x = ((xs - llx) / xscale - 0.5).astype(np.float32)
+        map_y = (ysize - 0.5 - (ys - lly) / yscale).astype(np.float32)
+
+        moved = cv2.remap(
+            source_values,
+            map_x,
+            map_y,
+            interpolation=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0,
+        )
+        valid = cv2.remap(
+            source_valid,
+            map_x,
+            map_y,
+            interpolation=cv2.INTER_NEAREST,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0,
+        )
+        moved[valid < 0.5] = np.nan
+        out[row0:row1] = moved
+
+    return out
 
 
 def colorize(z: np.ndarray) -> Image.Image:
@@ -104,15 +181,12 @@ def colorize(z: np.ndarray) -> Image.Image:
 
 
 def motion_image(z: np.ndarray) -> np.ndarray:
-    """Build a smooth field for robust phase correlation."""
     a = np.nan_to_num(z, nan=0.0)
     a = np.clip(a - 5.0, 0.0, 45.0)
-    a = cv2.GaussianBlur(a.astype(np.float32), (0, 0), 2.0)
-    return a
+    return cv2.GaussianBlur(a.astype(np.float32), (0, 0), 2.0)
 
 
 def estimate_motion(history: list[tuple[datetime, np.ndarray]]) -> tuple[float, float, float]:
-    """Return median x/y pixel displacement per 10 minutes and confidence."""
     estimates = []
     for (t0, z0), (t1, z1) in zip(history[-5:-1], history[-4:]):
         minutes = (t1 - t0).total_seconds() / 60.0
@@ -128,22 +202,20 @@ def estimate_motion(history: list[tuple[datetime, np.ndarray]]) -> tuple[float, 
         scale = NOWCAST_STEP / minutes
         dx *= scale
         dy *= scale
-        # Reject implausible displacement. At 500 m/pixel this is about 150 km/h.
         if np.hypot(dx, dy) > 50:
             continue
         estimates.append((dx, dy, response))
 
     if not estimates:
         return 0.0, 0.0, 0.0
-
-    dx = float(np.median([e[0] for e in estimates]))
-    dy = float(np.median([e[1] for e in estimates]))
-    confidence = float(np.median([e[2] for e in estimates]))
-    return dx, dy, confidence
+    return (
+        float(np.median([e[0] for e in estimates])),
+        float(np.median([e[1] for e in estimates])),
+        float(np.median([e[2] for e in estimates])),
+    )
 
 
 def advect(z: np.ndarray, dx: float, dy: float, factor: float) -> np.ndarray:
-    """Translate the latest radar field while preserving transparent no data areas."""
     h, w = z.shape
     values = np.nan_to_num(z, nan=0.0).astype(np.float32)
     valid = np.isfinite(z).astype(np.float32)
@@ -176,6 +248,7 @@ def main():
     frames = []
     history = []
     bbox = None
+    latest_georef = None
 
     for feature in reversed(fetch_features()):
         dt_text = feature["properties"]["datetime"]
@@ -185,10 +258,13 @@ def main():
         file_id = feature["id"]
         r = requests.get(href, timeout=TIMEOUT, headers={"User-Agent": "strandvejr-radar/1.0"})
         r.raise_for_status()
-        z = dbz_from_h5(r.content)
+        z, georef = dbz_from_h5(r.content)
+        latest_georef = georef or latest_georef
         history.append((dt, z))
+
         filename = dt.strftime("%Y%m%dT%H%M%SZ.png")
-        colorize(z).save(FRAMES / filename, optimize=True)
+        display_z = reproject_to_lonlat(z, georef, bbox)
+        colorize(display_z).save(FRAMES / filename, optimize=True)
         frames.append({
             "time": dt.isoformat().replace("+00:00", "Z"),
             "file": f"data/frames/{filename}",
@@ -209,7 +285,8 @@ def main():
         forecast_time = latest_time + timedelta(minutes=lead)
         forecast_z = advect(latest_z, dx, dy, step)
         filename = forecast_time.strftime("%Y%m%dT%H%M%SZ_nowcast.png")
-        colorize(forecast_z).save(FRAMES / filename, optimize=True)
+        display_z = reproject_to_lonlat(forecast_z, latest_georef, bbox)
+        colorize(display_z).save(FRAMES / filename, optimize=True)
         frames.append({
             "time": forecast_time.isoformat().replace("+00:00", "Z"),
             "file": f"data/frames/{filename}",
@@ -224,6 +301,7 @@ def main():
         "frameCount": len(frames),
         "observationCount": len(history),
         "forecastCount": forecast_count,
+        "georeferencing": "ODIM projection reprojected to regular lonlat grid",
         "nowcast": {
             "method": "radar-advection-phase-correlation",
             "horizonMinutes": NOWCAST_MINUTES,
@@ -236,7 +314,7 @@ def main():
         "legend": [{"dbz": int(v), "rgba": c.tolist()} for v, c in zip(BREAKS, COLORS)],
     }
     (OUT / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Skrev {len(history)} observationer og {forecast_count} prognoseframes; bevægelse {dx:.2f},{dy:.2f} px/{NOWCAST_STEP} min")
+    print(f"Skrev {len(history)} observationer og {forecast_count} prognoseframes med geografisk reprojektion")
 
 
 if __name__ == "__main__":
